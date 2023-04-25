@@ -7,54 +7,81 @@
 using namespace std;
 
 const int COUNT = 5;
+mutex main_mutex;
 
 class Fork {
 public:
-    Fork() : state() {}
-    void pickUp() {
-        state.lock();
+    Fork() : state(), owner(-1) {}
+
+    bool pickUp(int id) {
+        unique_lock<mutex> lock(state);
+        int attempts = 0;
+        while (owner != -1 && owner != id && attempts < COUNT) {
+            lock.unlock();
+            this_thread::sleep_for(chrono::milliseconds(rand() % 10));
+            lock.lock();
+            attempts++;
+        }
+        if (owner == -1) {
+            owner = id;
+            return true;
+        }
+        return false;
     }
-    void putDown() {
-        state.unlock();
+
+    void putDown(int id) {
+        std::unique_lock<mutex> lock(state);
+        owner = -1;
     }
+
 private:
-    mutex state;
+    std::mutex state;
+    int owner;
 };
+
 
 class Philosopher {
 public:
     Philosopher(int id, Fork& left, Fork& right)
-        : id(id), left_hand(left), right_hand(right) {}
+            : id(id), left_hand(left), right_hand(right) {}
 
     void operator()() {
         while (true) {
             think();
 
-            // Щоб не було взаємоблокування: парні (2-ий, 4-ий філософи) спочатку беруть праву виделку
-            if (id % 2 == 0) {
-                right_hand.pickUp();
-                left_hand.pickUp();
+            bool pickedUp = false;
+            while (!pickedUp) {
+                pickedUp = left_hand.pickUp(id);
+                if (!pickedUp) {
+                    std::this_thread::sleep_for(chrono::milliseconds(rand() % 10));
+                }
             }
-            // А непарні (1-ий, 3-ий, 5-ий філософи) беруть ліву виделку
-            else {
-                left_hand.pickUp();
-                right_hand.pickUp();
+
+            pickedUp = false;
+            while (!pickedUp) {
+                pickedUp = right_hand.pickUp(id);
+                if (!pickedUp) {
+                    left_hand.putDown(id);
+                    this_thread::sleep_for(chrono::milliseconds(rand() % 10));
+                }
             }
+
             eat();
 
-            left_hand.putDown();
-            right_hand.putDown();
+            left_hand.putDown(id);
+            right_hand.putDown(id);
         }
     }
+
 
 private:
     void think() {
         cout << "Фiлософ " << id << " думає.\n";
-        this_thread::sleep_for(chrono::milliseconds(1000));
+        this_thread::sleep_for(chrono::milliseconds(1500));
     }
     void eat() {
         cout << "Фiлософ " << id << " їсть спагеттi.\n";
-        this_thread::sleep_for(chrono::milliseconds(1000));
+        this_thread::sleep_for(chrono::milliseconds(1500));
     }
 
     int id;
@@ -73,8 +100,16 @@ int main() {
     for (auto& philosopher : philosophers) {
         threads.emplace_back(ref(philosopher));
     }
-    for (auto& thread : threads) {
-        thread.join();
+
+    // Блокуємо вхід до потоків
+    {
+        unique_lock<mutex> lock(main_mutex);
+        // Дочікуємось завершення всіх потоків
+        for (auto& thread : threads) {
+            thread.join();
+        }
     }
+
     return 0;
 }
+
