@@ -1,0 +1,3 @@
+D:/stuDYING/3d/OS/Lab6/1.1/cmake-build-debug/CMakeFiles/1_1.dir
+D:/stuDYING/3d/OS/Lab6/1.1/cmake-build-debug/CMakeFiles/edit_cache.dir
+D:/stuDYING/3d/OS/Lab6/1.1/cmake-build-debug/CMakeFiles/rebuild_cache.dir
